@@ -890,7 +890,7 @@ static bufsize_t manual_scan_link_url(cmark_chunk *input, bufsize_t offset) {
 // Return a link, an image, or a literal close bracket.
 static cmark_node *handle_close_bracket(cmark_parser *parser, subject *subj) {
   bufsize_t initial_pos, after_link_text_pos;
-  bufsize_t starturl, endurl, starttitle, endtitle, endall;
+  bufsize_t starturl, endurl, starttitle, endtitle, startcustomfield,endcustomfield, endall;
   bufsize_t n;
   bufsize_t sps;
   cmark_reference *ref = NULL;
@@ -940,14 +940,20 @@ static cmark_node *handle_close_bracket(cmark_parser *parser, subject *subj) {
                    ? starttitle
                    : starttitle + scan_link_title(&subj->input, starttitle);
 
-    endall = endtitle + scan_spacechars(&subj->input, endtitle);
+    startcustomfield = endtitle + scan_spacechars(&subj->input, endtitle);
+
+    endcustomfield = (startcustomfield == endtitle)
+                        ? startcustomfield
+                        : startcustomfield + scan_link_title(&subj->input, startcustomfield);
+
+    endall = endcustomfield + scan_spacechars(&subj->input, endcustomfield);
 
     if (peek_at(subj, endall) == ')') {
       subj->pos = endall + 1;
 
       url_chunk = cmark_chunk_dup(&subj->input, starturl, endurl - starturl);
       title_chunk =
-          cmark_chunk_dup(&subj->input, starttitle, endtitle - starttitle);
+              cmark_chunk_dup(&subj->input, starttitle, endtitle - starttitle);
       url = cmark_clean_url(subj->mem, &url_chunk);
       title = cmark_clean_title(subj->mem, &title_chunk);
       cmark_chunk_free(subj->mem, &url_chunk);
@@ -990,13 +996,13 @@ static cmark_node *handle_close_bracket(cmark_parser *parser, subject *subj) {
     goto noMatch;
   }
 
-noMatch:
+  noMatch:
   // If we fall through to here, it means we didn't match a link:
   pop_bracket(subj); // remove this opener from delimiter list
   subj->pos = initial_pos;
   return make_str(subj->mem, cmark_chunk_literal("]"));
 
-match:
+  match:
   inl = make_simple(subj->mem, is_image ? CMARK_NODE_IMAGE : CMARK_NODE_LINK);
   inl->as.link.url = url;
   inl->as.link.title = title;
